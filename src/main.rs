@@ -46,7 +46,7 @@ impl GameWatcher {
 }
 
 fn main() {
-    println!("After intense mental preparation, you finally set your mind to it\n. You're gonna play. Because that's just who you are.");
+    println!("After intense mental preparation, you finally set your mind to it.\nYou're gonna play. Because that's just who you are.");
     sleep(Duration::from_secs(2));
     let mut state: GameWatcher = GameWatcher::new(); 
     let health = rand::thread_rng().gen_range(2..7);
