@@ -8,6 +8,8 @@ struct GameWatcher {
     round_state: bool,
     my_turn: bool,
     shells: Vec<bool>,
+    blank_count: u8,
+    live_count: u8,
     player_health: u8,
     player_cuffs: u8,
     player_beer: u8,
@@ -29,6 +31,8 @@ impl GameWatcher {
             round_state: true,
             my_turn: true,
             shells: vec![],
+            blank_count: 0,
+            live_count: 0,
             player_health: 0,
             player_cuffs: 0,
             player_beer: 0,
@@ -53,47 +57,37 @@ fn main() {
     state.player_health = health;
     state.dealer_health = health;
     while state.running {
+        if check_health(&mut state) { break; }
+        state.blank_count = 0;
+        state.live_count = 0;
         //beginnning of new round
         let shells = rand::thread_rng().gen_range(2..9);
-        let mut blank_count = 0;
-        let mut live_count = 0;
         for shell in 0..shells {
             state.shells.push(rand::thread_rng().gen_bool(1.0 / 2.0));
             if state.shells[shell] == true {
-                live_count += 1;
+                state.live_count += 1;
             }
             else {
-                blank_count += 1;
+                state.blank_count += 1;
             }
         }
-        if live_count == 0 || blank_count == 0 {
+        if state.live_count == 0 || state.blank_count == 0 {
             state.shells.clear();
         }
         else {
             println!("your health: {}", state.player_health);
             println!("dealer health: {}", state.dealer_health);
             sleep(Duration::from_secs(1));
-            println!("{} shells loaded randomly. {} live and {} blank.", state.shells.len(), live_count, blank_count);
+            println!("{} shells loaded randomly. {} live and {} blank.", state.shells.len(), state.live_count, state.blank_count);
             sleep(Duration::from_secs(2));
         }
         state.round_state = true;
         state.my_turn = true;
         while state.round_state == true {
 
+            if check_health(&mut state) { break; }
             if state.shells.is_empty() {
                 state.round_state = false;
-                break;
-            }
-            if state.player_health == 0 {
-                println!("You're out of charges. With nothing to heal you back, you are pronounced dead.");
-                state.round_state = false;
-                state.running = false;
-            }
-            if state.dealer_health == 0 {
-                println!("The dealer's face disappears into the dark. Two red eyes glow in his place, as a briefcase is presented to you.");
-                println!("You open the briefcase to expose a wad of cash. You win.");
-                state.round_state = false;
-                state.running = false;
                 break;
             }
             if state.my_turn == true {
@@ -139,12 +133,15 @@ fn execute_choice(choice: u8, state: &mut GameWatcher) {
             match shell_pop {
                 Some(shell) => {
                     if shell == true {
+                        state.live_count -= 1;
                         println!("It's live. You shoot the dealer for 1.");
                         state.dealer_health -= 1;
                         sleep(Duration::from_secs(1));
                         println!("dealer has {} charges left.", state.dealer_health);
+                        sleep(Duration::from_secs(2));
                     }
                     else {
+                        state.blank_count -= 1;
                         println!("It's blank. You lose your turn.");
                         sleep(Duration::from_secs(2));
                     }
@@ -160,14 +157,18 @@ fn execute_choice(choice: u8, state: &mut GameWatcher) {
             match shell_pop {
                 Some(shell) => {
                     if shell == true {
+                        state.live_count -= 1;
                         println!("It's live. You shoot yourself for 1.");
                         sleep(Duration::from_secs(1));
                         state.player_health -= 1;
                         println!("you have {} charges left.", state.player_health);
+                        sleep(Duration::from_secs(2));
                         state.my_turn = false;
                     }
                     else {
+                        state.blank_count -= 1;
                         println!("It's blank. You get to keep your turn.");
+                        sleep(Duration::from_secs(2));
                     }
                 } 
                 None => return
@@ -184,6 +185,13 @@ fn execute_dealer(state: &mut GameWatcher) {
     if state.shells.len() == 1 {
         decision = state.shells[0];
     }
+    else if state.live_count == 0 {
+        decision = false;
+    }
+    else if state.blank_count == 0 {
+        println!("no more blanks");
+        decision = true;
+    }
     else {
         decision = rand::thread_rng().gen_bool(1.0 / 2.0);
     }
@@ -196,13 +204,16 @@ fn execute_dealer(state: &mut GameWatcher) {
         match shell_pop {
             Some(shell) => {
                 if shell == true {
+                    state.live_count -= 1;
                     println!("It's live. Dealer shoots you for 1.");
                     state.player_health -= 1;
                     sleep(Duration::from_secs(2));
                     println!("you have {} charges left.", state.player_health);
+                    sleep(Duration::from_secs(2));
                     state.my_turn = true;
                 }
                 else {
+                    state.blank_count -= 1;
                     println!("It's blank. The dealer gives up his turn");
                     sleep(Duration::from_secs(2));
                     state.my_turn = true;
@@ -219,18 +230,42 @@ fn execute_dealer(state: &mut GameWatcher) {
         match shell_pop {
             Some(shell) => {
                 if shell == true {
+                    state.live_count -= 1;
                     println!("It's live. Dealer shoots shoots himself for 1.");
                     state.dealer_health -= 1;
                     sleep(Duration::from_secs(1));
                     println!("dealer has {} charges left.", state.dealer_health);
+                    sleep(Duration::from_secs(2));
                     state.my_turn = true;
                 }
                 else {
+                    state.blank_count -= 1;
                     println!("It's blank. The dealer retains his turn.");
+                    sleep(Duration::from_secs(2));
                     return;
                 }
             } 
             None => return
         }
     }
+}
+
+fn check_health(state: &mut GameWatcher) -> bool {
+    if state.player_health == 0 {
+        println!("You're out of charges. With nothing to heal you back, you are pronounced dead.");
+        sleep(Duration::from_secs(2));
+        state.round_state = false;
+        state.running = false;
+        return true;
+    }
+    if state.dealer_health == 0 {
+        println!("The dealer's face disappears into the dark. Two red eyes glow in his place, as a briefcase is presented to you.");
+        sleep(Duration::from_secs(2));
+        println!("You open the briefcase to expose a wad of cash. You win.");
+        sleep(Duration::from_secs(2));
+        state.round_state = false;
+        state.running = false;
+        return true;
+    }
+    return false;
 }
