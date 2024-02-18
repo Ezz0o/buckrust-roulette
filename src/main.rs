@@ -63,7 +63,7 @@ fn generate_item() -> ItemType {
 }
 
 fn main() {
-    println!("After intense mental preparation, you finally set your mind to it.\nYou're gonna play. Because that's just who you are.");
+    println!("The dealer stares down at you with a creeping smile. The first round begins");
     sleep(Duration::from_secs(2));
     let mut state: GameWatcher = GameWatcher::new(); 
     let health = rand::thread_rng().gen_range(2..7);
@@ -161,9 +161,10 @@ fn execute_choice(choice: u8, state: &mut GameWatcher) {
             match shell_pop {
                 Some(shell) => {
                     if shell == true {
+                        let damage = if state.short_barrel == true {2} else {1};
                         state.live_count -= 1;
-                        println!("It's live. You shoot the dealer for 1.");
-                        state.dealer_health -= 1;
+                        println!("It's live. You shoot the dealer for {}.", damage);
+                        state.dealer_health -= damage;
                         sleep(Duration::from_secs(1));
                         println!("dealer has {} charges left.", state.dealer_health);
                         sleep(Duration::from_secs(2));
@@ -171,6 +172,11 @@ fn execute_choice(choice: u8, state: &mut GameWatcher) {
                     else {
                         state.blank_count -= 1;
                         println!("It's blank. You lose your turn.");
+                        sleep(Duration::from_secs(2));
+                    }
+                    if state.short_barrel == true {
+                        state.short_barrel = false;
+                        println!("You hear a weird static noise, as you observe the shotgun's barrel fade in place");
                         sleep(Duration::from_secs(2));
                     }
                     state.player_turn = false;
@@ -342,52 +348,57 @@ fn check_health(state: &mut GameWatcher) -> bool {
 
 
 fn execute_item(state: &mut GameWatcher, item: i8) {
-        //1- beer
-        //2- smoke
-        //3- cuffs
-        //4- mag
-        //5- knife
-        match item {
-            1 => {
-                let shell_pop = state.shells.pop();
-                let shell = shell_pop.unwrap();
-                if shell == false {println!("shell was a blank."); sleep(Duration::from_secs(2));} else {println!("shell was a live.");sleep(Duration::from_secs(2));}
-                return;
-            },
-            2 => {
-                state.player_health += 1;
-                println!("You smoke a cigarette for an extra charge.");
-                sleep(Duration::from_secs(2));
-                return;
-            },
-            3 => {
-                state.dealer_is_cuffed = true;
-                println!("The dealer takes the cuffs off your hands and puts them on.");
-                sleep(Duration::from_secs(2));
-                return;
-            },
-            4 => {
-               let shell_peek = state.shells.last();
-               match shell_peek {
-                   Some(shell) => {
-                       if *shell == false {println!("You rack the shotgun halfway, and peek a BLANK shell."); sleep(Duration::from_secs(2));}
-                       else {println!("You rack the shotgun halfway, and peek a LIVE shell."); sleep(Duration::from_secs(2));}
-                       return;
-                   }
-                   None => return
-               }
-            },
-            5 => {
-                if state.short_barrel {
-                    println!("the barrel is already cut.");
-                    sleep(Duration::from_secs(2));
+    //1- beer
+    //2- smoke
+    //3- cuffs
+    //4- mag
+    //5- knife
+
+    /* TODO: Check for item availability
+     *      apply effect of cuffing in main loop
+     *      ~apply effect of barrel shortening~
+     */
+    match item {
+        1 => {
+            let shell_pop = state.shells.pop();
+            let shell = shell_pop.unwrap();
+            if shell == false {println!("shell was a blank."); sleep(Duration::from_secs(2));} else {println!("shell was a live.");sleep(Duration::from_secs(2));}
+            return;
+        },
+        2 => {
+            state.player_health += 1;
+            println!("You smoke a cigarette for an extra charge.");
+            sleep(Duration::from_secs(2));
+            return;
+        },
+        3 => {
+            state.dealer_is_cuffed = true;
+            println!("The dealer takes the cuffs off your hands and puts them on.");
+            sleep(Duration::from_secs(2));
+            return;
+        },
+        4 => {
+            let shell_peek = state.shells.last();
+            match shell_peek {
+                Some(shell) => {
+                    if *shell == false {println!("You rack the shotgun halfway, and peek a BLANK shell."); sleep(Duration::from_secs(2));}
+                    else {println!("You rack the shotgun halfway, and peek a LIVE shell."); sleep(Duration::from_secs(2));}
                     return;
                 }
-                state.short_barrel = true;
-                println!("You cut through the barrel with some effort. You will deal double damage on the next live shot.");
+                None => return
+            }
+        },
+        5 => {
+            if state.short_barrel {
+                println!("the barrel is already cut.");
                 sleep(Duration::from_secs(2));
                 return;
-            },
-            _ => { return },
-        }
+            }
+            state.short_barrel = true;
+            println!("You cut through the barrel with some effort. You will deal double damage on the next live shot.");
+            sleep(Duration::from_secs(2));
+            return;
+        },
+        _ => { return },
+    }
 }
