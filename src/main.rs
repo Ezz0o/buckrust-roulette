@@ -1,15 +1,28 @@
+/* DEVELOPED BY EZZEDDIN/EZZO
+ *
+ * A simulation of the popular indie game "Buckshot Roulette".
+ * Original game made by Mike Klubnika
+ *
+ * Notes:
+ * This version does not replicate the original AI's behavior but instead attempts to improve on
+ * its decision making. It should be noted that the original dealer was made somewhat dumb in order
+ * to balance the game. This simulation aims to create a more challenging dealer, but maintains
+ * balance enough for it to be fair.
+ * */
+
+
 use std::io;
 use rand::Rng;
-use std::thread::sleep;
-use std::time::Duration;
+use std::{thread::sleep, time::Duration, env};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum ItemType {
     CUFFS,
     MAGNIFIER,
     KNIFE,
     BEER,
     SMOKE,
+    NONE
 }
 
 struct GameWatcher {
@@ -61,9 +74,30 @@ fn generate_item() -> ItemType {
         _ => { return ItemType::BEER}
     }
 }
+fn generate_shells(state: &mut GameWatcher) {
+    state.blank_count = 0;
+    state.live_count = 0;
+    while state.blank_count == 0 || state.live_count == 0 {
+        let shells = rand::thread_rng().gen_range(2..9);
+        for shell in 0..shells {
+            state.shells.push(rand::thread_rng().gen_bool(1.0 / 2.0));
+            if state.shells[shell] == true {
+                state.live_count += 1;
+            }
+            else {
+                state.blank_count += 1;
+            }
+        }
+        if state.live_count == 0 || state.blank_count == 0 {
+            state.shells.clear();
+            continue;
+        }
+    }
 
+}
 fn main() {
     println!("The dealer stares down at you with a creeping smile. The first round begins");
+    env::set_var("RUST_BACKTRACE", "1");
     sleep(Duration::from_secs(2));
     let mut state: GameWatcher = GameWatcher::new(); 
     let health = rand::thread_rng().gen_range(2..7);
@@ -81,41 +115,25 @@ fn main() {
                 println!("A slot from the table opens up, And from underneath, a box emerges up in it's place");
                 sleep(Duration::from_secs(2));
                 state.player_items.push(generate_item());
-                println!("You have acquired a {:?}", state.player_items.last());
+                println!("You have acquired a {:?}", state.player_items.last().unwrap());
                 state.dealer_items.push(generate_item());
                 sleep(Duration::from_secs(2));
             }
         }
         if check_health(&mut state) { break; }
-        state.blank_count = 0;
-        state.live_count = 0;
-        let shells = rand::thread_rng().gen_range(2..9);
-        for shell in 0..shells {
-            state.shells.push(rand::thread_rng().gen_bool(1.0 / 2.0));
-            if state.shells[shell] == true {
-                state.live_count += 1;
-            }
-            else {
-                state.blank_count += 1;
-            }
-        }
-        if state.live_count == 0 || state.blank_count == 0 {
-            state.shells.clear();
-        }
-        else {
-            println!("your health: {}", state.player_health);
-            println!("dealer health: {}", state.dealer_health);
-            sleep(Duration::from_secs(1));
-            println!("{} shells loaded randomly. {} live and {} blank.", state.shells.len(), state.live_count, state.blank_count);
-            sleep(Duration::from_secs(2));
-        }
+
+        generate_shells(&mut state);
+        println!("your health: {}", state.player_health);
+        println!("dealer health: {}", state.dealer_health);
+        sleep(Duration::from_secs(1));
+        println!("{} shells loaded randomly. {} live and {} blank.", state.shells.len(), state.live_count, state.blank_count);
+        sleep(Duration::from_secs(2));
         state.round_state = true;
         state.player_turn = true;
         while state.round_state == true {
 
             if check_health(&mut state) { break; }
             if state.shells.is_empty() {
-                state.round_state = false;
                 break;
             }
             if state.player_turn == true {
@@ -216,6 +234,7 @@ fn execute_choice(choice: u8, state: &mut GameWatcher) {
             let mut mag_count = 0; 
             let mut knife_count = 0;
 
+            state.player_items.push(ItemType::KNIFE);
             for item in 0..state.player_items.len() {
                 match state.player_items[item] {
                     ItemType::BEER => beer_count += 1,
@@ -223,6 +242,7 @@ fn execute_choice(choice: u8, state: &mut GameWatcher) {
                     ItemType::KNIFE => knife_count += 1,
                     ItemType::SMOKE => smoke_count += 1,
                     ItemType::MAGNIFIER => mag_count += 1,
+                    ItemType::NONE => continue
                 }
             }
             println!("1-beer:x{}, racks the current shell out, you keep your turn.", beer_count);
@@ -245,7 +265,7 @@ fn execute_choice(choice: u8, state: &mut GameWatcher) {
                             .expect("failed to validate answer. Enter a number from the choices");
                         i = input_text.trim().parse::<i8>().unwrap();
                     }
-                    execute_item(state, i);
+                    execute_item(state, i, vec![beer_count, smoke_count, cuffs_count, mag_count, knife_count]);
                 }
                 Err(..) => println!("choose a number from the list of choices"),
             }
@@ -257,6 +277,12 @@ fn execute_choice(choice: u8, state: &mut GameWatcher) {
 }
 
 fn execute_dealer(state: &mut GameWatcher) {
+    if state.dealer_is_cuffed == true {
+        println!("The dealer is cuffed. You get to play another turn");
+        state.dealer_is_cuffed = false;
+        state.player_turn = true;
+        return;
+    }
     let decision;
     if state.shells.len() == 1 {
         decision = state.shells[0];
@@ -265,7 +291,6 @@ fn execute_dealer(state: &mut GameWatcher) {
         decision = false;
     }
     else if state.blank_count == 0 {
-        println!("no more blanks");
         decision = true;
     }
     else {
@@ -347,7 +372,7 @@ fn check_health(state: &mut GameWatcher) -> bool {
 }
 
 
-fn execute_item(state: &mut GameWatcher, item: i8) {
+fn execute_item(state: &mut GameWatcher, item: i8, counts: Vec<i8>) {
     //1- beer
     //2- smoke
     //3- cuffs
@@ -358,47 +383,80 @@ fn execute_item(state: &mut GameWatcher, item: i8) {
      *      apply effect of cuffing in main loop
      *      ~apply effect of barrel shortening~
      */
+    let used_item;
     match item {
         1 => {
+            if counts[0] == 0 {
+                println!("You don't have any beers.");
+                return;
+            }
+            used_item = ItemType::BEER;
             let shell_pop = state.shells.pop();
             let shell = shell_pop.unwrap();
-            if shell == false {println!("shell was a blank."); sleep(Duration::from_secs(2));} else {println!("shell was a live.");sleep(Duration::from_secs(2));}
-            return;
+            if shell == false {
+                println!("You rack the shotgun. Shell was a blank."); 
+                sleep(Duration::from_secs(2));
+            } else {
+                println!("You rack the shotgun. Shell was a live.");
+                sleep(Duration::from_secs(2));
+            }
         },
         2 => {
+            if counts[1] == 0 {
+                println!("You don't have any smokes.");
+                return;
+            }
+            used_item = ItemType::SMOKE;
             state.player_health += 1;
             println!("You smoke a cigarette for an extra charge.");
             sleep(Duration::from_secs(2));
-            return;
         },
         3 => {
+            if counts[2] == 0 {
+                println!("You don't have any cuffs.");
+                return;
+            }
+            used_item = ItemType::CUFFS;
             state.dealer_is_cuffed = true;
             println!("The dealer takes the cuffs off your hands and puts them on.");
             sleep(Duration::from_secs(2));
-            return;
         },
         4 => {
+            if counts[3] == 0 {
+                println!("You don't have any magnifiers.");
+                return;
+            }
+            used_item = ItemType::MAGNIFIER;
             let shell_peek = state.shells.last();
             match shell_peek {
                 Some(shell) => {
                     if *shell == false {println!("You rack the shotgun halfway, and peek a BLANK shell."); sleep(Duration::from_secs(2));}
                     else {println!("You rack the shotgun halfway, and peek a LIVE shell."); sleep(Duration::from_secs(2));}
-                    return;
                 }
                 None => return
             }
         },
         5 => {
+            if counts[4] == 0 {
+                println!("You don't have any knives.");
+                return;
+            }
+            used_item = ItemType::KNIFE;
             if state.short_barrel {
                 println!("the barrel is already cut.");
                 sleep(Duration::from_secs(2));
-                return;
             }
             state.short_barrel = true;
             println!("You cut through the barrel with some effort. You will deal double damage on the next live shot.");
             sleep(Duration::from_secs(2));
-            return;
         },
-        _ => { return },
+        _ => used_item = ItemType::NONE,
+    }
+    //TODO: this method of iteration is broken.
+    // doesn't remove item whene only one exists
+    for i in 0..state.player_items.len()-1 {
+        if used_item == state.player_items[i] {
+            state.player_items.remove(i); 
+        }
     }
 }
