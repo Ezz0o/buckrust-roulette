@@ -75,9 +75,10 @@ fn generate_item() -> ItemType {
     }
 }
 fn generate_shells(state: &mut GameWatcher) {
-    state.blank_count = 0;
-    state.live_count = 0;
     while state.blank_count == 0 || state.live_count == 0 {
+        state.shells.clear();
+        state.blank_count = 0;
+        state.live_count = 0;
         let shells = rand::thread_rng().gen_range(2..9);
         for shell in 0..shells {
             state.shells.push(rand::thread_rng().gen_bool(1.0 / 2.0));
@@ -87,10 +88,6 @@ fn generate_shells(state: &mut GameWatcher) {
             else {
                 state.blank_count += 1;
             }
-        }
-        if state.live_count == 0 || state.blank_count == 0 {
-            state.shells.clear();
-            continue;
         }
     }
 
@@ -234,7 +231,6 @@ fn execute_choice(choice: u8, state: &mut GameWatcher) {
             let mut mag_count = 0; 
             let mut knife_count = 0;
 
-            state.player_items.push(ItemType::KNIFE);
             for item in 0..state.player_items.len() {
                 match state.player_items[item] {
                     ItemType::BEER => beer_count += 1,
@@ -379,10 +375,6 @@ fn execute_item(state: &mut GameWatcher, item: i8, counts: Vec<i8>) {
     //4- mag
     //5- knife
 
-    /* TODO: Check for item availability
-     *      apply effect of cuffing in main loop
-     *      ~apply effect of barrel shortening~
-     */
     let used_item;
     match item {
         1 => {
@@ -452,9 +444,14 @@ fn execute_item(state: &mut GameWatcher, item: i8, counts: Vec<i8>) {
         },
         _ => used_item = ItemType::NONE,
     }
+
     //TODO: this method of iteration is broken.
-    // doesn't remove item whene only one exists
-    for i in 0..state.player_items.len()-1 {
+    // doesn't remove item when only one exists
+    for i in 0..state.player_items.len() {
+        if state.player_items.len() == 1 {
+            state.player_items.remove(0);
+            return;
+        }
         if used_item == state.player_items[i] {
             state.player_items.remove(i); 
         }
