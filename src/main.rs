@@ -90,8 +90,8 @@ fn generate_shells(state: &mut GameWatcher) {
             }
         }
     }
-
 }
+
 fn main() {
     println!("The dealer stares down at you with a creeping smile. The first round begins");
     env::set_var("RUST_BACKTRACE", "1");
@@ -134,6 +134,14 @@ fn main() {
                 break;
             }
             if state.player_turn == true {
+
+                if state.player_is_cuffed == true {
+                    println!("You are cuffed. You get to play another turn");
+                    state.player_is_cuffed = false;
+                    state.player_turn = false;
+                    break;
+                }
+
                 println!("What do you want to do?");
                 println!("1- Shoot the dealer.");
                 println!("2- Shoot yourself.");
@@ -261,7 +269,15 @@ fn execute_choice(choice: u8, state: &mut GameWatcher) {
                             .expect("failed to validate answer. Enter a number from the choices");
                         i = input_text.trim().parse::<i8>().unwrap();
                     }
-                    execute_item(state, i, vec![beer_count, smoke_count, cuffs_count, mag_count, knife_count]);
+                        match i {
+                            1 => if beer_count == 0 {println!("You don't have beer."); return;}
+                            2 => if smoke_count == 0 {println!("You don't have smoke."); return;}
+                            3 => if cuffs_count == 0 {println!("You don't have cuffs."); return;}
+                            4 => if mag_count == 0 {println!("You don't have mag."); return;}
+                            5 => if knife_count == 0 {println!("You don't have knife."); return;}
+                            _ => {}
+                        }
+                    execute_item(state, i);
                 }
                 Err(..) => println!("choose a number from the list of choices"),
             }
@@ -273,6 +289,13 @@ fn execute_choice(choice: u8, state: &mut GameWatcher) {
 }
 
 fn execute_dealer(state: &mut GameWatcher) {
+    //TODO: Dealer item logic
+    // - If you have smokes, use them right away
+    // - Use beers when you don't know the current shell
+    // - Always use cuffs
+    // - Always use magnifiers
+    // - Use knives when you know next shell is live
+
     if state.dealer_is_cuffed == true {
         println!("The dealer is cuffed. You get to play another turn");
         state.dealer_is_cuffed = false;
@@ -368,92 +391,93 @@ fn check_health(state: &mut GameWatcher) -> bool {
 }
 
 
-fn execute_item(state: &mut GameWatcher, item: i8, counts: Vec<i8>) {
+fn execute_item(state: &mut GameWatcher, item: i8) {
     //1- beer
     //2- smoke
     //3- cuffs
     //4- mag
     //5- knife
 
+    let user = if state.player_turn { "You" } else { "The dealer"};
     let used_item;
     match item {
         1 => {
-            if counts[0] == 0 {
-                println!("You don't have any beers.");
-                return;
-            }
             used_item = ItemType::BEER;
             let shell_pop = state.shells.pop();
             let shell = shell_pop.unwrap();
             if shell == false {
-                println!("You rack the shotgun. Shell was a blank."); 
+                println!("{} used beer. Racked shell was a blank.", user); 
                 sleep(Duration::from_secs(2));
             } else {
-                println!("You rack the shotgun. Shell was a live.");
+                println!("{} used beer. Racked shell was a live.", user);
                 sleep(Duration::from_secs(2));
             }
         },
         2 => {
-            if counts[1] == 0 {
-                println!("You don't have any smokes.");
-                return;
-            }
             used_item = ItemType::SMOKE;
             state.player_health += 1;
-            println!("You smoke a cigarette for an extra charge.");
+            println!("{} used smoke, {} gain an extra charge.", user, user);
             sleep(Duration::from_secs(2));
         },
         3 => {
-            if counts[2] == 0 {
-                println!("You don't have any cuffs.");
-                return;
-            }
             used_item = ItemType::CUFFS;
             state.dealer_is_cuffed = true;
-            println!("The dealer takes the cuffs off your hands and puts them on.");
+            println!("{} used cuffs. Next turn will be skipped.", user);
             sleep(Duration::from_secs(2));
         },
         4 => {
-            if counts[3] == 0 {
-                println!("You don't have any magnifiers.");
-                return;
-            }
             used_item = ItemType::MAGNIFIER;
             let shell_peek = state.shells.last();
             match shell_peek {
                 Some(shell) => {
-                    if *shell == false {println!("You rack the shotgun halfway, and peek a BLANK shell."); sleep(Duration::from_secs(2));}
-                    else {println!("You rack the shotgun halfway, and peek a LIVE shell."); sleep(Duration::from_secs(2));}
+                    if user == "You" {
+                        if *shell == false {
+                            println!("You rack the shotgun halfway, and peek a BLANK shell."); 
+                            sleep(Duration::from_secs(2));
+                        }
+                        else {println!("You rack the shotgun halfway, and peek a LIVE shell."); sleep(Duration::from_secs(2));}
+                    }
+                    else {
+                        println!("The dealer breaks the magnifier and looks through it. 'Very interesting' he says."); 
+                        sleep(Duration::from_secs(2));
+                    }
                 }
                 None => return
             }
         },
         5 => {
-            if counts[4] == 0 {
-                println!("You don't have any knives.");
-                return;
-            }
             used_item = ItemType::KNIFE;
             if state.short_barrel {
                 println!("the barrel is already cut.");
                 sleep(Duration::from_secs(2));
             }
             state.short_barrel = true;
-            println!("You cut through the barrel with some effort. You will deal double damage on the next live shot.");
+            println!("{} used knife. {} will deal double damage on the next live shot.", user, user);
             sleep(Duration::from_secs(2));
         },
         _ => used_item = ItemType::NONE,
     }
 
-    //TODO: this method of iteration is broken.
-    // doesn't remove item when only one exists
-    for i in 0..state.player_items.len() {
-        if state.player_items.len() == 1 {
-            state.player_items.remove(0);
-            return;
+    if user == "You" {
+        for i in 0..state.player_items.len() {
+            if state.player_items.len() == 1 {
+                state.player_items.remove(0);
+                return;
+            }
+            if used_item == state.player_items[i] {
+                state.player_items.remove(i); 
+            }
         }
-        if used_item == state.player_items[i] {
-            state.player_items.remove(i); 
+    }
+    else {
+        for i in 0..state.dealer_items.len() {
+            if state.dealer_items.len() == 1 {
+                state.player_items.remove(0);
+                return;
+            }
+            if used_item == state.dealer_items[i] {
+                state.player_items.remove(i); 
+            }
         }
     }
 }
