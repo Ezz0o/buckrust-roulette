@@ -3,6 +3,8 @@
  * A simulation of the popular indie game "Buckshot Roulette".
  * Original game made by Mike Klubnika
  *
+ * WORK IN PROGRESS
+ *
  * Notes:
  * This version does not replicate the original AI's behavior but instead attempts to improve on
  * its decision making. It should be noted that the original dealer was made somewhat dumb in order
